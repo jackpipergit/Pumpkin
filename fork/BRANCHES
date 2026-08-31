@@ -1,0 +1,12 @@
+# Patch branches merged into the `minechunk` integration branch.
+# One branch per line. `#` starts a comment; blank lines are ignored.
+# Order matters: scripts/rebuild-integration.sh rebases each branch onto the
+# pinned upstream SHA and merges them into `minechunk` --no-ff in this order.
+# Remove a branch from this list once upstream merges it.
+
+meta
+fix/lever-placement-orientation
+fix/lever-moved-guard
+fix/sign-support-solidity
+feat/leaves-decay-event
+feat/spawner-spawn-event

@@ -158,3 +158,6 @@ world_nether/
 world_the_end/
 patchbukkit/
 minecraft-sources*/
+
+# Live server config lives outside the repo; see fork/pumpkin.example.toml
+/pumpkin.toml

@@ -1,0 +1,92 @@
+name: Upstream drift check
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  ISSUE_TITLE: Upstream rebase conflict
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  check:
+    name: Check rebase onto upstream
+    if: github.repository == 'jackpipergit/Pumpkin'
+    runs-on: ubuntu-latest
+    steps:
+      # Full history: the check script needs merge-bases and every origin branch.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # Capture the exit code instead of failing here, so the reporting steps below still run.
+      - name: Run upstream conflict check
+        id: check
+        env:
+          CONFLICT_REPORT: ${{ runner.temp }}/conflict-report.txt
+        run: |
+          echo "CONFLICT_REPORT=$CONFLICT_REPORT" >> "$GITHUB_ENV"
+          set +e
+          bash scripts/check-upstream.sh
+          code=$?
+          set -e
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve upstream master SHA
+        id: upstream
+        run: |
+          sha=$(git rev-parse upstream/master 2>/dev/null) \
+            || sha=$(git ls-remote https://github.com/Pumpkin-MC/Pumpkin.git master 2>/dev/null | cut -f1) \
+            || sha=""
+          echo "sha=${sha:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update tracking issue
+        if: steps.check.outputs.exit_code != '0'
+        run: |
+          {
+            echo "\`scripts/check-upstream.sh\` could not rebase every branch in \`fork/BRANCHES\` onto upstream/master."
+            echo
+            echo "Upstream master: \`${{ steps.upstream.outputs.sha }}\`"
+            echo "Last checked: $(date -u '+%Y-%m-%d %H:%M UTC')"
+            echo
+            echo "Conflicting branches:"
+            if [ -s "$CONFLICT_REPORT" ]; then
+              while IFS= read -r branch; do
+                [ -n "$branch" ] && echo "- \`$branch\`"
+              done < "$CONFLICT_REPORT"
+            else
+              echo "- none reported; the check script itself failed, see the run log"
+            fi
+            echo
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } > "$RUNNER_TEMP/issue-body.md"
+
+          number=$(gh issue list --state open --limit 200 --json number,title \
+            --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")
+
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body-file "$RUNNER_TEMP/issue-body.md"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body-file "$RUNNER_TEMP/issue-body.md"
+          fi
+
+      - name: Close tracking issue
+        if: steps.check.outputs.exit_code == '0'
+        run: |
+          number=$(gh issue list --state open --limit 200 --json number,title \
+            --jq "map(select(.title == \"$ISSUE_TITLE\")) | .[0].number // empty")
+
+          if [ -n "$number" ]; then
+            gh issue close "$number" \
+              --comment "upstream/master \`${{ steps.upstream.outputs.sha }}\` rebases clean on every branch in \`fork/BRANCHES\`."
+          fi
+
+      - name: Fail run on conflict
+        if: steps.check.outputs.exit_code != '0'
+        run: exit 1

@@ -1,0 +1,49 @@
+name: Patch branch build
+
+# Patch branches are pure upstream plus a single patch, so they do not carry this file and the
+# push trigger below rarely fires on them. What they do carry is upstream's own workflow, which
+# runs on push to any branch, so pushing a patch branch to the fork already gets it full CI.
+# The workflow_dispatch path is how to run this fork's own check against any branch on demand:
+# it runs from the default branch and checks out whichever ref is given.
+
+on:
+  push:
+    branches:
+      - "feat/**"
+      - "fix/**"
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to build and test
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build and test branch
+    if: github.repository == 'jackpipergit/Pumpkin'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.branch || github.ref }}
+          submodules: recursive
+
+      - run: rustup update stable && rustup default stable
+
+      # Same shared-key as build.yml so dependency artifacts are reused across workflows.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: pumpkin-fork
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Test
+        run: cargo test

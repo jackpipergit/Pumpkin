@@ -1,0 +1,80 @@
+name: Build integration branch
+
+on:
+  push:
+    branches:
+      - minechunk
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    name: Format, lint, and test
+    if: github.repository == 'jackpipergit/Pumpkin'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - run: rustup update stable && rustup default stable
+      - run: rustup component add rustfmt clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: pumpkin-fork
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      # Upstream is clippy-clean at the pinned commit, so a workspace-wide run only trips on the fork's own patches.
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+  image:
+    name: Build and push container image
+    if: github.repository == 'jackpipergit/Pumpkin'
+    needs: checks
+    # Deploy hosts are arm64, and a native arm64 runner beats QEMU emulation for a Rust build.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Resolve short SHA
+        id: vars
+        run: echo "short_sha=${GITHUB_SHA:0:9}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: fork/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ghcr.io/jackpipergit/pumpkin:${{ steps.vars.outputs.short_sha }}
+            ghcr.io/jackpipergit/pumpkin:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
