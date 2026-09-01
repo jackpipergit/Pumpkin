@@ -86,6 +86,22 @@ Entry template:
   as the worked example of the lifecycle.
 - **Risk:** n/a.
 
+## fix/wasm-event-reentry-guard
+
+- **Why:** A WASM plugin that reaches back into itself from inside one of its
+  own host calls (an event fired by `teleport-world`, a command executing
+  itself, IPC ping-pong) parks forever on its own store mutex and freezes the
+  whole server (upstream issue #2056). The guard tracks guest calls per task
+  chain and skips or rejects same-chain re-entrant deliveries instead of
+  waiting.
+- **Touches:** `crates/pumpkin/src/plugin/loader/wasm/wasm_host/` (new
+  `reentry.rs` plus a wrap at every guest entry point) and
+  `crates/pumpkin/src/server/scheduler.rs`.
+- **Upstream PR:** not yet opened.
+- **Status:** carried.
+- **Risk:** medium — the wasm host sees steady upstream feature work, so the
+  wrapped call sites will drift.
+
 ## Conventions
 
 **Prefer a plugin over a core patch.** Pumpkin has a plugin API; if the
