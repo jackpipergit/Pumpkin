@@ -1,4 +1,4 @@
-use crate::plugin::loader::wasm::wasm_host::WasmPlugin;
+use crate::plugin::loader::wasm::wasm_host::{WasmPlugin, reentry};
 use crate::server::Server;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashSet};
@@ -197,7 +197,7 @@ impl TaskScheduler {
             let handler_id = task.handler_id;
             let server_clone = server.clone();
 
-            server.spawn_task(async move {
+            server.spawn_task(reentry::scope(plugin.reentry_id, async move {
                 let mut store = plugin.store.lock().await;
                 match plugin.plugin_instance {
                     crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(ref instance) => {
@@ -215,7 +215,7 @@ impl TaskScheduler {
                         }
                     }
                 }
-            });
+            }));
 
             // If repeating, schedule next run
             if let Some(period) = task.period {

@@ -18,6 +18,7 @@ use crate::{
     plugin::loader::wasm::wasm_host::{
         DowncastResourceExt, PluginInstance, WasmPlugin,
         args::build_consumed_args_from_context,
+        reentry,
         wit::v0_1::pumpkin::plugin::command::{CommandError as CommandErrorWit, SuggestionRequest},
     },
     server::Server,
@@ -30,9 +31,19 @@ pub struct WasmCommandExecutor {
 }
 
 impl CommandExecutor for WasmCommandExecutor {
+    #[allow(clippy::too_many_lines)]
     fn execute(&self, context: &CommandContext) -> CommandExecutorResult {
+        if reentry::is_reentrant(self.plugin.reentry_id) {
+            reentry::warn_skipped(self.plugin.reentry_id, &self.plugin.name, "command");
+            return Err(
+                DISPATCHER_PARSE_EXCEPTION.create_without_context(TextComponent::text(format!(
+                    "Re-entrant command call into plugin `{}` skipped to avoid deadlock",
+                    self.plugin.name
+                ))),
+            );
+        }
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
+            tokio::runtime::Handle::current().block_on(reentry::scope(self.plugin.reentry_id, async {
                 let mut store = self.plugin.store.lock().await;
 
                 let sender_resource = store
@@ -132,7 +143,7 @@ impl CommandExecutor for WasmCommandExecutor {
                         }
                     }
                 }
-            })
+            }))
         })
     }
 }
@@ -145,75 +156,86 @@ pub struct WasmCommandSuggestionProvider {
 
 impl SuggestionProvider for WasmCommandSuggestionProvider {
     fn suggest(&self, context: &CommandContext, builder: SuggestionsBuilder) -> Suggestions {
+        if reentry::is_reentrant(self.plugin.reentry_id) {
+            reentry::warn_skipped(
+                self.plugin.reentry_id,
+                &self.plugin.name,
+                "command suggestions",
+            );
+            return builder.build();
+        }
         tokio::task::block_in_place(|| {
-            tokio::runtime::Handle::current().block_on(async {
-                let mut store = self.plugin.store.lock().await;
+            tokio::runtime::Handle::current().block_on(reentry::scope(
+                self.plugin.reentry_id,
+                async {
+                    let mut store = self.plugin.store.lock().await;
 
-                let sender_resource = match store
-                    .data_mut()
-                    .add_command_sender(context.source.output.clone())
-                {
-                    Ok(resource) => resource,
-                    Err(error) => {
-                        tracing::error!(
-                            "Failed to create command sender resource for suggestions: {error}"
-                        );
-                        return builder.build();
+                    let sender_resource = match store
+                        .data_mut()
+                        .add_command_sender(context.source.output.clone())
+                    {
+                        Ok(resource) => resource,
+                        Err(error) => {
+                            tracing::error!(
+                                "Failed to create command sender resource for suggestions: {error}"
+                            );
+                            return builder.build();
+                        }
+                    };
+                    let server_resource = match store.data_mut().add_server(self.server.clone()) {
+                        Ok(resource) => resource,
+                        Err(error) => {
+                            tracing::error!(
+                                "Failed to create server resource for suggestions: {error}"
+                            );
+                            return builder.build();
+                        }
+                    };
+
+                    let input = &context.input;
+                    let request = SuggestionRequest {
+                        input: input.clone(),
+                        cursor: input.len().try_into().unwrap_or(u32::MAX),
+                        start: builder.start.try_into().unwrap_or(u32::MAX),
+                        remaining: builder.remaining().to_string(),
+                    };
+
+                    let response = match self.plugin.plugin_instance {
+                        PluginInstance::V0_1(ref plugin) => {
+                            plugin
+                                .call_handle_command_suggestion(
+                                    &mut *store,
+                                    self.handler_id,
+                                    sender_resource,
+                                    server_resource,
+                                    &request,
+                                )
+                                .await
+                        }
+                    };
+
+                    let response = match response {
+                        Ok(response) => response,
+                        Err(error) => {
+                            tracing::error!("Wasm command suggestion failed: {error}");
+                            return builder.build();
+                        }
+                    };
+
+                    let mut result_builder = builder;
+                    for suggestion in response.values {
+                        if let Some(tooltip) = suggestion.tooltip {
+                            let text = tooltip.consume(store.data_mut()).provider;
+                            result_builder =
+                                result_builder.suggest_with_tooltip(suggestion.value, text);
+                        } else {
+                            result_builder = result_builder.suggest(suggestion.value);
+                        }
                     }
-                };
-                let server_resource = match store.data_mut().add_server(self.server.clone()) {
-                    Ok(resource) => resource,
-                    Err(error) => {
-                        tracing::error!(
-                            "Failed to create server resource for suggestions: {error}"
-                        );
-                        return builder.build();
-                    }
-                };
 
-                let input = &context.input;
-                let request = SuggestionRequest {
-                    input: input.clone(),
-                    cursor: input.len().try_into().unwrap_or(u32::MAX),
-                    start: builder.start.try_into().unwrap_or(u32::MAX),
-                    remaining: builder.remaining().to_string(),
-                };
-
-                let response = match self.plugin.plugin_instance {
-                    PluginInstance::V0_1(ref plugin) => {
-                        plugin
-                            .call_handle_command_suggestion(
-                                &mut *store,
-                                self.handler_id,
-                                sender_resource,
-                                server_resource,
-                                &request,
-                            )
-                            .await
-                    }
-                };
-
-                let response = match response {
-                    Ok(response) => response,
-                    Err(error) => {
-                        tracing::error!("Wasm command suggestion failed: {error}");
-                        return builder.build();
-                    }
-                };
-
-                let mut result_builder = builder;
-                for suggestion in response.values {
-                    if let Some(tooltip) = suggestion.tooltip {
-                        let text = tooltip.consume(store.data_mut()).provider;
-                        result_builder =
-                            result_builder.suggest_with_tooltip(suggestion.value, text);
-                    } else {
-                        result_builder = result_builder.suggest(suggestion.value);
-                    }
-                }
-
-                result_builder.build()
-            })
+                    result_builder.build()
+                },
+            ))
         })
     }
 }

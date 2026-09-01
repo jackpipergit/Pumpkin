@@ -2199,33 +2199,36 @@ impl WasmChunkGenerator {
             proto_chunk,
         };
 
-        let run = async {
-            let mut store = self.plugin.store.lock().await;
-            let Ok(buffer_res) = store.data_mut().add_chunk_buffer(chunk_buffer) else {
-                return;
-            };
-            let buffer_rep = buffer_res.rep();
+        let run = crate::plugin::loader::wasm::wasm_host::reentry::scope(
+            self.plugin.reentry_id,
+            async {
+                let mut store = self.plugin.store.lock().await;
+                let Ok(buffer_res) = store.data_mut().add_chunk_buffer(chunk_buffer) else {
+                    return;
+                };
+                let buffer_rep = buffer_res.rep();
 
-            match self.plugin.plugin_instance {
-                crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(ref plugin) => {
-                    let _ = plugin
-                        .call_handle_generate_phase(
-                            &mut *store,
-                            self.generator_id,
-                            phase,
-                            buffer_res,
-                        )
-                        .await;
+                match self.plugin.plugin_instance {
+                    crate::plugin::loader::wasm::wasm_host::PluginInstance::V0_1(ref plugin) => {
+                        let _ = plugin
+                            .call_handle_generate_phase(
+                                &mut *store,
+                                self.generator_id,
+                                phase,
+                                buffer_res,
+                            )
+                            .await;
 
-                    let _ = store
+                        let _ = store
                         .data_mut()
                         .resource_table
                         .delete::<crate::plugin::loader::wasm::wasm_host::state::ChunkBufferResource>(
                             wasmtime::component::Resource::new_own(buffer_rep),
                         );
+                    }
                 }
-            }
-        };
+            },
+        );
 
         // Tokio runtime probably won't be available since chunk gen happens on rayon
         if tokio::runtime::Handle::try_current().is_ok() {

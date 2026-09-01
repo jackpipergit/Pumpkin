@@ -14,7 +14,7 @@ use crate::{
     plugin::{
         BoxFuture, EventHandler, Payload,
         loader::wasm::wasm_host::{
-            PluginInstance, WasmPlugin,
+            PluginInstance, WasmPlugin, reentry,
             state::{PlayerResource, PluginHostState, TextComponentResource, WorldResource},
             wit::{self, v0_1::pumpkin},
         },
@@ -233,35 +233,46 @@ pub(super) fn consume_world(
 impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
     fn handle<'a>(&'a self, server: &'a Arc<Server>, event: &'a E) -> BoxFuture<'a, ()> {
         Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            let wasm_event = event.to_wasm_event(store.data_mut());
-            match self.plugin.plugin_instance {
-                PluginInstance::V0_1(ref plugin) => {
-                    let Ok(server_res) = store.data_mut().add_server(server.clone()) else {
-                        cleanup_event(&wasm_event, store.data_mut());
-                        return;
-                    };
-                    let server_rep = server_res.rep();
-                    let result = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server_res, &wasm_event)
-                        .await;
-                    match result {
-                        Ok(returned_event) => {
-                            cleanup_event(&returned_event, store.data_mut());
-                            cleanup_event(&wasm_event, store.data_mut());
-                        }
-                        Err(_) => {
-                            cleanup_event(&wasm_event, store.data_mut());
-                        }
-                    }
-                    let _ = store
-                        .data_mut()
-                        .resource_table
-                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                        wasmtime::component::Resource::new_own(server_rep),
-                    );
-                }
+            if reentry::is_reentrant(self.plugin.reentry_id) {
+                reentry::warn_skipped(
+                    self.plugin.reentry_id,
+                    &self.plugin.name,
+                    E::get_name_static(),
+                );
+                return;
             }
+            reentry::scope(self.plugin.reentry_id, async {
+                let mut store = self.plugin.store.lock().await;
+                let wasm_event = event.to_wasm_event(store.data_mut());
+                match self.plugin.plugin_instance {
+                    PluginInstance::V0_1(ref plugin) => {
+                        let Ok(server_res) = store.data_mut().add_server(server.clone()) else {
+                            cleanup_event(&wasm_event, store.data_mut());
+                            return;
+                        };
+                        let server_rep = server_res.rep();
+                        let result = plugin
+                            .call_handle_event(&mut *store, self.handler_id, server_res, &wasm_event)
+                            .await;
+                        match result {
+                            Ok(returned_event) => {
+                                cleanup_event(&returned_event, store.data_mut());
+                                cleanup_event(&wasm_event, store.data_mut());
+                            }
+                            Err(_) => {
+                                cleanup_event(&wasm_event, store.data_mut());
+                            }
+                        }
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                            wasmtime::component::Resource::new_own(server_rep),
+                        );
+                    }
+                }
+            })
+            .await;
         })
     }
 
@@ -271,35 +282,46 @@ impl<E: Payload + ToFromWasmEvent> EventHandler<E> for WasmPluginEventHandler {
         event: &'a mut E,
     ) -> BoxFuture<'a, ()> {
         Box::pin(async {
-            let mut store = self.plugin.store.lock().await;
-            let wasm_event = event.to_wasm_event(store.data_mut());
-            match self.plugin.plugin_instance {
-                PluginInstance::V0_1(ref plugin) => {
-                    let Ok(server_res) = store.data_mut().add_server(server.clone()) else {
-                        cleanup_event(&wasm_event, store.data_mut());
-                        return;
-                    };
-                    let server_rep = server_res.rep();
-                    let result = plugin
-                        .call_handle_event(&mut *store, self.handler_id, server_res, &wasm_event)
-                        .await;
-                    match result {
-                        Ok(returned_event) => {
-                            event.apply_wasm_event(returned_event, store.data_mut());
-                            cleanup_event(&wasm_event, store.data_mut());
-                        }
-                        Err(_) => {
-                            cleanup_event(&wasm_event, store.data_mut());
-                        }
-                    }
-                    let _ = store
-                        .data_mut()
-                        .resource_table
-                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
-                        wasmtime::component::Resource::new_own(server_rep),
-                    );
-                }
+            if reentry::is_reentrant(self.plugin.reentry_id) {
+                reentry::warn_skipped(
+                    self.plugin.reentry_id,
+                    &self.plugin.name,
+                    E::get_name_static(),
+                );
+                return;
             }
+            reentry::scope(self.plugin.reentry_id, async {
+                let mut store = self.plugin.store.lock().await;
+                let wasm_event = event.to_wasm_event(store.data_mut());
+                match self.plugin.plugin_instance {
+                    PluginInstance::V0_1(ref plugin) => {
+                        let Ok(server_res) = store.data_mut().add_server(server.clone()) else {
+                            cleanup_event(&wasm_event, store.data_mut());
+                            return;
+                        };
+                        let server_rep = server_res.rep();
+                        let result = plugin
+                            .call_handle_event(&mut *store, self.handler_id, server_res, &wasm_event)
+                            .await;
+                        match result {
+                            Ok(returned_event) => {
+                                event.apply_wasm_event(returned_event, store.data_mut());
+                                cleanup_event(&wasm_event, store.data_mut());
+                            }
+                            Err(_) => {
+                                cleanup_event(&wasm_event, store.data_mut());
+                            }
+                        }
+                        let _ = store
+                            .data_mut()
+                            .resource_table
+                            .delete::<crate::plugin::loader::wasm::wasm_host::state::ServerResource>(
+                            wasmtime::component::Resource::new_own(server_rep),
+                        );
+                    }
+                }
+            })
+            .await;
         })
     }
 }
