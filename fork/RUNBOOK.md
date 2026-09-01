@@ -35,7 +35,7 @@ like an upstream bug, and you will waste a day proving it isn't one.
 # patch branches first — they were rebased, so history changed
 git push --force-with-lease origin fix/lever-placement-orientation
 # ...one per branch in fork/BRANCHES
-git push origin minechunk
+git push --force-with-lease origin minechunk   # recreated from scratch, never a fast-forward
 ```
 
 `--force-with-lease`, never `--force`. Pushing the patch branches also

@@ -87,7 +87,7 @@ fi
 
 ensure_upstream
 note "fetching $UPSTREAM_REMOTE"
-git fetch "$UPSTREAM_REMOTE" --tags
+git fetch "$UPSTREAM_REMOTE" --tags --force
 
 if [ "$#" -ge 1 ]; then
     TARGET_INPUT="$1"

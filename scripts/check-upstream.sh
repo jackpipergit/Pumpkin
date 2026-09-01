@@ -87,7 +87,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 ensure_upstream
 note "fetching $UPSTREAM_REMOTE"
-git fetch "$UPSTREAM_REMOTE" --tags
+git fetch "$UPSTREAM_REMOTE" --tags --force
 
 git rev-parse --verify --quiet "${UPSTREAM_REF}^{commit}" >/dev/null ||
     die "$UPSTREAM_REF does not resolve after fetch"
