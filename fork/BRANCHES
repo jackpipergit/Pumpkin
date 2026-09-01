@@ -10,3 +10,4 @@ fix/lever-moved-guard
 fix/sign-support-solidity
 feat/leaves-decay-event
 feat/spawner-spawn-event
+fix/wasm-event-reentry-guard
