@@ -6616,6 +6616,10 @@ impl EntityBase for Player {
             "Dimension",
             self.world().dimension.minecraft_name.to_string(),
         );
+        // Several loaded worlds can share a dimension type (a plugin-created
+        // world is usually overworld-typed), so the name is what identifies
+        // the world the player was actually in.
+        nbt.put_string("WorldName", self.world().get_world_name().to_string());
 
         if let Some(respawn) = self
             .respawn_point
