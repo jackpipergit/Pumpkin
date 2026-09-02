@@ -145,3 +145,13 @@ are the ones most likely to need a manual rebase.
 - **Upstream PR:** not yet opened.
 - **Status:** carried.
 - **Risk:** low — mirrors the basalt branch a few lines above it.
+
+## fix/raycast-start-block
+
+- **Why:** `World::raycast` accepted the block the ray starts in (the
+  player's eye block, air treated as a full cube) without asking `hit_check`,
+  so buckets poured next to the player's head instead of where they looked.
+- **Touches:** `crates/pumpkin/src/world/mod.rs` (one extra condition).
+- **Upstream PR:** not yet opened.
+- **Status:** carried.
+- **Risk:** low.
