@@ -124,3 +124,13 @@ are the ones most likely to need a manual rebase.
 - **Upstream PR:** not yet opened.
 - **Status:** carried.
 - **Risk:** low — additive NBT key, falls back to the old lookup.
+
+## fix/custom-name-styling
+
+- **Why:** Item custom names lost their colour, bold and `italic = false`
+  on the wire, so plugin GUIs could not style item titles.
+- **Touches:** `crates/pumpkin-protocol/src/codec/data_component.rs`
+  (`CustomNameImpl::serialize` encodes the full component like lore).
+- **Upstream PR:** not yet opened.
+- **Status:** carried.
+- **Risk:** low — one codec arm, mirrors `LoreImpl`.
