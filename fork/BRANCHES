@@ -13,3 +13,4 @@ feat/spawner-spawn-event
 fix/wasm-event-reentry-guard
 feat/persist-world-name
 fix/custom-name-styling
+feat/block-form-fluids

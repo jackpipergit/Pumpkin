@@ -134,3 +134,14 @@ are the ones most likely to need a manual rebase.
 - **Upstream PR:** not yet opened.
 - **Status:** carried.
 - **Risk:** low — one codec arm, mirrors `LoreImpl`.
+
+## feat/block-form-fluids
+
+- **Why:** `BlockFormEvent` was only fired for basalt; cobblestone and
+  obsidian forming from lava next to water set the block directly, so a
+  plugin could neither see nor cancel a cobblestone generator (the skyblock
+  ore generator needs exactly that hook).
+- **Touches:** `crates/pumpkin/src/block/fluid/lava.rs`.
+- **Upstream PR:** not yet opened.
+- **Status:** carried.
+- **Risk:** low — mirrors the basalt branch a few lines above it.
