@@ -11,3 +11,4 @@ fix/sign-support-solidity
 feat/leaves-decay-event
 feat/spawner-spawn-event
 fix/wasm-event-reentry-guard
+feat/persist-world-name

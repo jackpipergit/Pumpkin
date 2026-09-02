@@ -113,3 +113,14 @@ open and rot into rebase debt.
 **Risk defaults.** Any patch touching networking, chunk handling, or entity
 internals is **Risk: high** by default. Those areas move fastest upstream and
 are the ones most likely to need a manual rebase.
+
+## feat/persist-world-name
+
+- **Why:** A player who logs out in a plugin-created world (overworld-typed,
+  e.g. the skyblock world) rejoined in the primary overworld at the same
+  coordinates, because player data only recorded the dimension type.
+- **Touches:** `crates/pumpkin/src/entity/player.rs` (writes `WorldName`),
+  `crates/pumpkin/src/server/mod.rs` (`get_world_by_name`, preferred on rejoin).
+- **Upstream PR:** not yet opened.
+- **Status:** carried.
+- **Risk:** low — additive NBT key, falls back to the old lookup.
