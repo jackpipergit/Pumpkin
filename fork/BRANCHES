@@ -1,0 +1,21 @@
+# Patch branches merged into the `minechunk` integration branch.
+# One branch per line. `#` starts a comment; blank lines are ignored.
+# Order matters: scripts/rebuild-integration.sh rebases each branch onto the
+# pinned upstream SHA and merges them into `minechunk` --no-ff in this order.
+# Branches touching the same file are adjacent, so a conflict in one is
+# resolved next to its neighbour rather than half a list apart.
+# Remove a branch from this list once upstream merges it.
+
+meta
+fix/lever-placement-orientation
+fix/lever-moved-guard
+fix/lever-click-sound
+fix/button-use-result
+fix/sign-support-solidity
+fix/sign-waterlogging
+fix/custom-name-styling
+fix/raycast-start-block
+feat/spawner-spawn-event
+feat/lava-block-form-event
+feat/persist-world-name
+fix/wasm-event-reentry-guard
