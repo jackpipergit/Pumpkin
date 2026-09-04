@@ -64,9 +64,13 @@ Entry template:
 
 - **Why:** Fires `LeavesDecayEvent` for the plugin API when leaves decay.
 - **Touches:** `crates/pumpkin/src/block/blocks/leaves.rs`.
-- **Upstream PR:** https://github.com/Pumpkin-MC/Pumpkin/pull/3170 (open).
-- **Status:** carried.
-- **Risk:** low.
+- **Upstream PR:** https://github.com/Pumpkin-MC/Pumpkin/pull/3170 (open, and
+  now redundant — close it).
+- **Status:** merged upstream, by another route. Upstream wrote its own fire
+  site in `f8d162769` ("fix: many non event firing", 2026-09-03) rather than
+  taking the PR, so the pin bump to `8f4329b86` brought the behaviour in and
+  the branch conflicts with it. Removed from `fork/BRANCHES`.
+- **Risk:** n/a.
 
 ## feat/spawner-spawn-event
 

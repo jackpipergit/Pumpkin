@@ -15,7 +15,6 @@ fix/sign-support-solidity
 fix/sign-waterlogging
 fix/custom-name-styling
 fix/raycast-start-block
-feat/leaves-decay-event
 feat/spawner-spawn-event
 feat/lava-block-form-event
 feat/persist-world-name
