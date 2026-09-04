@@ -6633,9 +6633,15 @@ impl World {
 
         let mut block = BlockPos::floored(from.x, from.y, from.z);
 
+        // The starting block (usually the one holding the player's eyes) only
+        // counts if the caller's check accepts it, exactly as every later
+        // block does. Without this an air block is treated as a full cube that
+        // the ray starts inside, so it "hits" at once and a bucket poured at
+        // the eye block's neighbour instead of the block being looked at.
         let (collision, direction) = self.ray_outline_check(&block, from, to);
         if let Some(dir) = direction
             && collision
+            && hit_check(&block, self)
         {
             return Some((block, dir));
         }
