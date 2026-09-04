@@ -319,11 +319,14 @@ impl DataComponentCodec<Self> for ItemModelImpl {
 
 impl DataComponentCodec<Self> for CustomNameImpl {
     fn serialize(&self, seq: &mut impl NetworkWriteExt) -> Result<(), WritingError> {
-        let mut bytes = Vec::new();
-        NbtTag::String(self.name.clone().get_text().into_boxed_str())
-            .serialize(&mut NbtWriteHelperJava::new(&mut bytes))
-            .map_err(|e| WritingError::Message(e.to_string()))?;
-        seq.write_slice(&bytes)?;
+        // The full component, as lore does: writing only the plain text
+        // dropped every colour and the `italic = false` that plugin menus
+        // rely on, so custom names always rendered white and italic.
+        seq.write_slice(
+            &self
+                .name
+                .encode_for_version(&pumpkin_util::version::JavaMinecraftVersion::V_26_2),
+        )?;
         Ok(())
     }
 
