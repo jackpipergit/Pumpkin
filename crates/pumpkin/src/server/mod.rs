@@ -461,6 +461,15 @@ impl Server {
             })
     }
 
+    /// The loaded world with this folder name, if any.
+    pub fn get_world_by_name(&self, name: &str) -> Option<Arc<World>> {
+        self.worlds
+            .load()
+            .iter()
+            .find(|w| w.get_world_name() == name)
+            .cloned()
+    }
+
     pub fn create_world(self: &Arc<Self>, name: String, dimension: Dimension) -> Arc<World> {
         {
             let worlds = self.worlds.load();
@@ -628,7 +637,15 @@ impl Server {
         let first_world = self.worlds.load().first().cloned()?;
 
         let (world, nbt) = if let Ok(Some(data)) = self.player_data_storage.load_data(&profile.id) {
-            if let Some(dimension_key) = data.get_string("Dimension") {
+            if let Some(world) = data
+                .get_string("WorldName")
+                .and_then(|name| self.get_world_by_name(name))
+            {
+                // A named world wins over the dimension type: with several
+                // overworld-typed worlds loaded, "Dimension" alone would always
+                // resolve to the first one.
+                (world, Some(data))
+            } else if let Some(dimension_key) = data.get_string("Dimension") {
                 if let Some(dimension) = Dimension::from_name(dimension_key) {
                     let world = self.get_world_from_dimension(dimension);
                     (world, Some(data))
