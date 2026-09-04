@@ -50,16 +50,27 @@ linux/arm64 image built from `fork/Dockerfile` and pushed to GHCR.
 Images are tagged `ghcr.io/jackpipergit/pumpkin:<short-sha>` plus a moving
 `:latest`. **Deployments pin the SHA tag. Never `latest`.**
 
-Staging first. The compose stack at `../../pumpkin/docker-compose.yml` (the
-pumpkin workspace) carries a `pumpkin-fork` service on staging port 25566 with
-its own `./server-fork` volume, separate from the main service's data.
+The workspace server is the staging tier. The compose stack at
+`../../pumpkin/docker-compose.yml` (the pumpkin workspace) runs these images as
+its `pumpkin` service against the real `./server` data, so a bad image is felt
+here before it is felt on the VPS.
 
-1. Update the `pumpkin-fork` image tag to the new short-sha.
-2. `docker compose up -d pumpkin-fork`
-3. Connect a client to `:25566` and exercise whatever the patches touch.
-4. Check the container logs before calling it good.
+1. Record the tag that is running now, as a comment on the `image:` line.
+2. Update the `pumpkin` image tag to the new short-sha.
+3. `docker compose up -d pumpkin`
+4. Connect a client to `:25565` and exercise whatever the patches touch.
+5. Check the container logs before calling it good.
 
 Only then move production.
+
+There is also a `pumpkin-repro` service on port 25566 with its own
+`./server-fork` volume, for reproducing a server bug against a throwaway world.
+It is behind a compose profile, so a plain `docker compose up -d` never starts
+it:
+
+```sh
+docker compose --profile repro up -d pumpkin-repro
+```
 
 ## 4. Rollback
 
@@ -74,9 +85,13 @@ avoidable work.
 ## 5. Production note
 
 The minechunk.net VPS currently self-updates from upstream's nightly releases
-via its own `update.sh`. It is not running these images. Cutting it over to the
-fork images is a separate, deliberate decision — until that decision is made,
-this runbook covers staging only.
+via its own `update.sh` (`REPO="Pumpkin-MC/Pumpkin"`, `TAG="nightly"`). It is
+not running these images, so **production carries none of these patches** —
+including the ones the plugins depend on. Cutting it over means pointing that
+script's `REPO`/`TAG` at this fork's releases; everything else in it (backup,
+plugin rebuild against the new API, health check, rollback) works unchanged.
+That is a separate, deliberate decision — until it is made, this runbook covers
+the workspace server only.
 
 ## 6. Config hygiene
 
