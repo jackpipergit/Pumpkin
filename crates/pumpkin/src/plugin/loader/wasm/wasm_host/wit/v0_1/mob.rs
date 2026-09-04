@@ -7,7 +7,7 @@ use crate::entity::ai::goal::Goal;
 use crate::entity::mob::Mob as InternalMob;
 use crate::entity::passive::tamable::TamableAnimal;
 use crate::plugin::loader::wasm::wasm_host::{
-    PluginInstance, WasmPlugin,
+    PluginInstance, WasmPlugin, reentry,
     state::{MobResource, PluginHostState},
     wit::v0_1::entity::entity_from_resource,
     wit::v0_1::pumpkin::plugin::{
@@ -226,7 +226,7 @@ impl Goal for CustomWasmGoal {
             let goal_id = self.goal_id;
             let world = entity_arc.get_entity().world.load();
             if let Some(server) = world.server.upgrade() {
-                let run = async move {
+                let run = reentry::scope(plugin.reentry_id, async move {
                     let mut store = plugin.store.lock().await;
                     match plugin.plugin_instance {
                         PluginInstance::V0_1(ref plugin_inst) => {
@@ -269,7 +269,7 @@ impl Goal for CustomWasmGoal {
                                 );
                         }
                     }
-                };
+                });
 
                 if tokio::runtime::Handle::try_current().is_ok() {
                     tokio::task::block_in_place(|| {
@@ -288,7 +288,7 @@ impl Goal for CustomWasmGoal {
             let goal_id = self.goal_id;
             let world = entity_arc.get_entity().world.load();
             if let Some(server) = world.server.upgrade() {
-                let run = async move {
+                let run = reentry::scope(plugin.reentry_id, async move {
                     let mut store = plugin.store.lock().await;
                     match plugin.plugin_instance {
                         PluginInstance::V0_1(ref plugin_inst) => {
@@ -331,7 +331,7 @@ impl Goal for CustomWasmGoal {
                                 );
                         }
                     }
-                };
+                });
 
                 if tokio::runtime::Handle::try_current().is_ok() {
                     tokio::task::block_in_place(|| {
@@ -350,7 +350,7 @@ impl Goal for CustomWasmGoal {
             let goal_id = self.goal_id;
             let world = entity_arc.get_entity().world.load();
             if let Some(server) = world.server.upgrade() {
-                let run = async move {
+                let run = reentry::scope(plugin.reentry_id, async move {
                     let mut store = plugin.store.lock().await;
                     match plugin.plugin_instance {
                         PluginInstance::V0_1(ref plugin_inst) => {
@@ -393,7 +393,7 @@ impl Goal for CustomWasmGoal {
                                 );
                         }
                     }
-                };
+                });
 
                 if tokio::runtime::Handle::try_current().is_ok() {
                     tokio::task::block_in_place(|| {

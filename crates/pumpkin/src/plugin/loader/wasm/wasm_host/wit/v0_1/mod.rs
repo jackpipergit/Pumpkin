@@ -1,7 +1,7 @@
 use crate::plugin::{
     PluginMetadata,
     loader::wasm::wasm_host::{
-        PluginInitError, PluginInstance, WasmPlugin, state::PluginHostState,
+        PluginInitError, PluginInstance, WasmPlugin, reentry, state::PluginHostState,
     },
 };
 use tokio::sync::Mutex;
@@ -139,6 +139,8 @@ pub async fn init_plugin(
         WasmPlugin {
             plugin_instance: PluginInstance::V0_1(plugin),
             store: Mutex::new(store),
+            reentry_id: reentry::next_plugin_id(),
+            name: metadata.name.clone(),
         },
         metadata,
     ))

@@ -13,6 +13,7 @@ use crate::plugin::{
 
 pub mod args;
 pub mod logging;
+pub mod reentry;
 pub mod signature;
 pub mod state;
 pub mod wit;
@@ -121,6 +122,12 @@ pub enum PluginInstance {
 pub struct WasmPlugin {
     pub plugin_instance: PluginInstance,
     pub store: Mutex<Store<PluginHostState>>,
+    /// Process-unique id used by the [`reentry`] guard.
+    pub reentry_id: u64,
+    /// Plugin name, readable without taking the store lock. The store state
+    /// holds the same name, but reading it there requires the very lock the
+    /// re-entry guard exists to avoid waiting on.
+    pub name: String,
 }
 
 impl PluginRuntime {
@@ -378,20 +385,23 @@ impl WasmPlugin {
 
         store.data_mut().name = Some(metadata.name.clone());
 
-        match self.plugin_instance {
-            PluginInstance::V0_1(ref plugin) => {
-                let context_res = store.data_mut().add_context(context)?;
-                let context_rep = context_res.rep();
-                let res = plugin.call_on_load(&mut *store, context_res).await;
-                let _ = store
-                    .data_mut()
-                    .resource_table
-                    .delete::<crate::plugin::loader::wasm::wasm_host::state::ContextResource>(
-                    wasmtime::component::Resource::new_own(context_rep),
-                );
-                res
+        reentry::scope(self.reentry_id, async {
+            match self.plugin_instance {
+                PluginInstance::V0_1(ref plugin) => {
+                    let context_res = store.data_mut().add_context(context)?;
+                    let context_rep = context_res.rep();
+                    let res = plugin.call_on_load(&mut *store, context_res).await;
+                    let _ = store
+                        .data_mut()
+                        .resource_table
+                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ContextResource>(
+                        wasmtime::component::Resource::new_own(context_rep),
+                    );
+                    res
+                }
             }
-        }
+        })
+        .await
     }
 
     pub async fn on_unload(
@@ -406,20 +416,23 @@ impl WasmPlugin {
             context.server.task_scheduler.disable_plugin(&plugin);
         }
 
-        match self.plugin_instance {
-            PluginInstance::V0_1(ref plugin) => {
-                let context_res = store.data_mut().add_context(context)?;
-                let context_rep = context_res.rep();
-                let res = plugin.call_on_unload(&mut *store, context_res).await;
-                let _ = store
-                    .data_mut()
-                    .resource_table
-                    .delete::<crate::plugin::loader::wasm::wasm_host::state::ContextResource>(
-                    wasmtime::component::Resource::new_own(context_rep),
-                );
-                res
+        reentry::scope(self.reentry_id, async {
+            match self.plugin_instance {
+                PluginInstance::V0_1(ref plugin) => {
+                    let context_res = store.data_mut().add_context(context)?;
+                    let context_rep = context_res.rep();
+                    let res = plugin.call_on_unload(&mut *store, context_res).await;
+                    let _ = store
+                        .data_mut()
+                        .resource_table
+                        .delete::<crate::plugin::loader::wasm::wasm_host::state::ContextResource>(
+                        wasmtime::component::Resource::new_own(context_rep),
+                    );
+                    res
+                }
             }
-        }
+        })
+        .await
     }
 
     pub async fn handle_ipc_message(
@@ -427,15 +440,27 @@ impl WasmPlugin {
         sender: &String,
         message: &Vec<u8>,
     ) -> Result<Result<Vec<u8>, String>, wasmtime::Error> {
-        let mut store = self.store.lock().await;
-
-        match self.plugin_instance {
-            PluginInstance::V0_1(ref plugin) => {
-                plugin
-                    .call_handle_ipc_message(&mut *store, sender, message)
-                    .await
-            }
+        if reentry::is_reentrant(self.reentry_id) {
+            reentry::warn_skipped(self.reentry_id, &self.name, "ipc");
+            return Ok(Err(format!(
+                "IPC message from `{sender}` rejected: plugin `{}` is already executing \
+                 on this call chain (delivering would deadlock)",
+                self.name
+            )));
         }
+
+        reentry::scope(self.reentry_id, async {
+            let mut store = self.store.lock().await;
+
+            match self.plugin_instance {
+                PluginInstance::V0_1(ref plugin) => {
+                    plugin
+                        .call_handle_ipc_message(&mut *store, sender, message)
+                        .await
+                }
+            }
+        })
+        .await
     }
 }
 
