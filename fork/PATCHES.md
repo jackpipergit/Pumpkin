@@ -102,18 +102,6 @@ Entry template:
 - **Risk:** medium — the wasm host sees steady upstream feature work, so the
   wrapped call sites will drift.
 
-## Conventions
-
-**Prefer a plugin over a core patch.** Pumpkin has a plugin API; if the
-behaviour can be built as a plugin, build it as a plugin. If the plugin API
-merely lacks a hook, upstream the *hook* — a small, generic patch that fires an
-event and does nothing else. Small generic patches merge; big bespoke ones sit
-open and rot into rebase debt.
-
-**Risk defaults.** Any patch touching networking, chunk handling, or entity
-internals is **Risk: high** by default. Those areas move fastest upstream and
-are the ones most likely to need a manual rebase.
-
 ## feat/persist-world-name
 
 - **Why:** A player who logs out in a plugin-created world (overworld-typed,
@@ -135,17 +123,6 @@ are the ones most likely to need a manual rebase.
 - **Status:** carried.
 - **Risk:** low — one codec arm, mirrors `LoreImpl`.
 
-## feat/block-form-fluids
-
-- **Why:** `BlockFormEvent` was only fired for basalt; cobblestone and
-  obsidian forming from lava next to water set the block directly, so a
-  plugin could neither see nor cancel a cobblestone generator (the skyblock
-  ore generator needs exactly that hook).
-- **Touches:** `crates/pumpkin/src/block/fluid/lava.rs`.
-- **Upstream PR:** not yet opened.
-- **Status:** carried.
-- **Risk:** low — mirrors the basalt branch a few lines above it.
-
 ## fix/raycast-start-block
 
 - **Why:** `World::raycast` accepted the block the ray starts in (the
@@ -155,3 +132,75 @@ are the ones most likely to need a manual rebase.
 - **Upstream PR:** not yet opened.
 - **Status:** carried.
 - **Risk:** low.
+
+## fix/lever-click-sound
+
+- **Why:** Flipping a lever was silent and emitted no game event, so nothing
+  nearby (note blocks, sculk sensors, a listening plugin) heard it.
+- **Touches:** `crates/pumpkin/src/block/blocks/redstone/lever.rs`.
+- **Upstream PR:** https://github.com/Pumpkin-MC/Pumpkin/pull/3204 (open).
+- **Status:** carried.
+- **Risk:** medium — third patch in this file; the three lever branches merge
+  in sequence, so a conflict in one usually means resolving all three.
+
+## fix/button-use-result
+
+- **Why:** Clicking an already pressed button returned the wrong action
+  result, so the client replayed the swing and the arm twitched.
+- **Touches:** `crates/pumpkin/src/block/blocks/redstone/buttons.rs`.
+- **Upstream PR:** https://github.com/Pumpkin-MC/Pumpkin/pull/3205 (open).
+- **Status:** carried.
+- **Risk:** low.
+
+## fix/sign-waterlogging
+
+- **Why:** A sign placed in water displaced it instead of waterlogging, which
+  vanilla clients render as a sign in an air pocket.
+- **Touches:** `crates/pumpkin/src/block/blocks/signs.rs`.
+- **Upstream PR:** https://github.com/Pumpkin-MC/Pumpkin/pull/3206 (open).
+- **Status:** carried.
+- **Risk:** medium — same file as `fix/sign-support-solidity`, which merges
+  immediately before it.
+
+## feat/lava-block-form-event
+
+- **Why:** `BlockFormEvent` was fired for basalt only, so cobblestone and
+  obsidian forming from lava next to water set the block directly and a plugin
+  could neither see nor cancel it — which is exactly the hook the skyblock ore
+  generator needs. Fixing that exposed two more bugs in the same path: the
+  conversion never notified clients (the block stayed lava until a reload) and
+  the neighbour scan did not match vanilla's.
+- **Touches:** `crates/pumpkin/src/block/fluid/lava.rs`.
+- **Upstream PR:** a stack of three, oldest first —
+  https://github.com/Pumpkin-MC/Pumpkin/pull/3214 (client notify),
+  https://github.com/Pumpkin-MC/Pumpkin/pull/3215 (neighbour scan),
+  https://github.com/Pumpkin-MC/Pumpkin/pull/3216 (the event). All open.
+- **Status:** carried. The branch is the tip of the stack and contains all
+  three commits, so it is the only one listed in `fork/BRANCHES`; the other two
+  exist as branches purely to keep the PRs reviewable one change at a time.
+- **Risk:** medium — a rewrite of the conversion path rather than an addition,
+  and upstream merging any one of the three PRs rebases the other two.
+
+## feat/block-form-fluids
+
+- **Why:** The first cut of the lava `BlockFormEvent` hook.
+- **Touches:** `crates/pumpkin/src/block/fluid/lava.rs`.
+- **Upstream PR:** never opened.
+- **Status:** abandoned — superseded by `feat/lava-block-form-event`, which
+  does the same job in the form the upstream PRs were cut from. The branch is
+  kept until those PRs land so the old shape can still be diffed; it must not
+  be listed in `fork/BRANCHES` alongside its successor, as the two rewrite the
+  same function.
+- **Risk:** n/a.
+
+## Conventions
+
+**Prefer a plugin over a core patch.** Pumpkin has a plugin API; if the
+behaviour can be built as a plugin, build it as a plugin. If the plugin API
+merely lacks a hook, upstream the *hook* — a small, generic patch that fires an
+event and does nothing else. Small generic patches merge; big bespoke ones sit
+open and rot into rebase debt.
+
+**Risk defaults.** Any patch touching networking, chunk handling, or entity
+internals is **Risk: high** by default. Those areas move fastest upstream and
+are the ones most likely to need a manual rebase.
